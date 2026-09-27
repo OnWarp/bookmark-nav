@@ -18,9 +18,15 @@ export async function saveConfig(cfg: ExtConfig): Promise<void> {
 	await chrome.storage.local.set({ [KEY]: cfg });
 }
 
-// 规范化站点地址:去尾部斜杠,校验协议,供请求拼接与权限申请使用
+// 规范化站点地址:去尾部斜杠,校验协议,供请求拼接与权限申请使用。
+// 缺协议的输入(如 example.com)返回 null 交由调用方提示,不能让 new URL 抛异常
 export function normalizeSiteUrl(input: string): string | null {
-	const url = new URL(input.trim());
+	let url: URL;
+	try {
+		url = new URL(input.trim());
+	} catch {
+		return null;
+	}
 	if (url.protocol !== "https:" && url.protocol !== "http:") return null;
 	return url.origin;
 }

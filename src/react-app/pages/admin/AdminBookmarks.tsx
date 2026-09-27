@@ -65,6 +65,14 @@ import {
 	type BookmarkPayload,
 } from "@/lib/admin-queries";
 
+// 标签输入文本 → 标签数组:中英文逗号均作分隔符
+function parseTagsText(text: string): string[] {
+	return text
+		.split(/[,，]/)
+		.map((t) => t.trim())
+		.filter(Boolean);
+}
+
 // 编辑/新建书签表单弹窗
 function BookmarkDialog({
 	bookmark,
@@ -85,6 +93,9 @@ function BookmarkDialog({
 	const fetchMeta = useFetchMetadata();
 	const fetchMetaAI = useFetchMetadataAI();
 	const [form, setForm] = useState<BookmarkPayload>({ title: "", url: "" });
+	// 标签输入框以原始文本为唯一状态源:输入中途不切分(否则敲逗号会立即被
+	// 解析回写吞掉),提交时才由 parseTagsText 写进 payload
+	const [tagsText, setTagsText] = useState("");
 	const flatCats = flattenCategoryTree(categories);
 
 	// 弹窗打开时同步表单初始值(open 由父组件控制,不能依赖 onOpenChange 回调)。
@@ -93,6 +104,7 @@ function BookmarkDialog({
 	if (resetToken.open !== open || resetToken.bookmark !== bookmark) {
 		setResetToken({ open, bookmark });
 		if (open) {
+			setTagsText((bookmark?.tags ?? []).join(", "));
 			setForm(
 				bookmark
 					? {
@@ -103,7 +115,6 @@ function BookmarkDialog({
 							categoryId: bookmark.categoryId,
 							isPinned: bookmark.isPinned,
 							visibility: bookmark.visibility,
-							tags: bookmark.tags,
 						}
 					: { title: "", url: "", visibility: "public" },
 			);
@@ -128,17 +139,22 @@ function BookmarkDialog({
 			...f,
 			title: f.title || meta.title || "",
 			description: f.description || meta.description,
-
-			tags: f.tags?.length ? f.tags : meta.tags,
 			categoryId: f.categoryId != null ? f.categoryId : (meta.categoryId ?? null),
 		}));
+		// 标签走输入框文本源:仅当用户尚未输入时才回填 AI 建议
+		if (!parseTagsText(tagsText).length && meta.tags?.length) {
+			setTagsText(meta.tags.join(", "));
+		}
 	}
 
 
 	async function handleSubmit(e: FormEvent) {
 		e.preventDefault();
 		try {
-			await save.mutateAsync({ id: bookmark?.id, data: form });
+			await save.mutateAsync({
+				id: bookmark?.id,
+				data: { ...form, tags: parseTagsText(tagsText) },
+			});
 			onOpenChange(false);
 		} catch {
 			// 失败时保持弹窗打开,错误提示由 mutation 的 onError 负责
@@ -230,16 +246,8 @@ function BookmarkDialog({
 							<Label htmlFor="bm-tags">标签(逗号分隔)</Label>
 							<Input
 								id="bm-tags"
-								value={(form.tags ?? []).join(", ")}
-								onChange={(e) =>
-									setForm({
-										...form,
-										tags: e.target.value
-											.split(/[,，]/)
-											.map((t) => t.trim())
-											.filter(Boolean),
-									})
-								}
+								value={tagsText}
+								onChange={(e) => setTagsText(e.target.value)}
 								placeholder="工具, 文档"
 							/>
 							</div>

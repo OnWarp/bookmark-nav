@@ -17,15 +17,24 @@ export default defineConfig({
 	},
 	manifest: ({ browser }) => ({
 		name: "Bookmark Nav 收藏助手",
-		version: "0.1.0",
+		// 不写 version:硬编码会永久覆盖 package.json 的版本导致发版漂移,留空即继承
 		description: "一键收藏网页到你的 Bookmark Nav 导航站",
 		// 最小权限集:不申请 <all_urls>,站点权限由用户在 options 配置时动态授予
 		permissions: ["storage", "activeTab", "contextMenus"],
-		optional_host_permissions: ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+		// optional 只是"可申请"而非默认授予。补 http://*/*:自托管用户可能经明文
+		// HTTP(如局域网 IP)访问导航站,缺了它权限申请永远失败
+		optional_host_permissions: ["https://*/*", "http://*/*"],
 		action: {},
-		// Firefox 发布必须的扩展 ID,Chrome 会忽略
+		// Firefox 发布必须的扩展 ID 与数据收集声明(2025-11 起 AMO 强制),Chrome 会忽略
 		...(browser === "firefox"
-			? { browser_specific_settings: { gecko: { id: "bookmark-nav-ext@deer.dev" } } }
+			? {
+					browser_specific_settings: {
+						gecko: {
+							id: "bookmark-nav-ext@deer.dev",
+							data_collection_permissions: { required: ["none"] },
+						},
+					},
+				}
 			: {}),
 	}),
 	// 发布打包配置

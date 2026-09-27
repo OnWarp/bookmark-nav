@@ -106,10 +106,25 @@ export default function App() {
 		setAiError(null);
 		try {
 			const res = await aiAutoFill(tab.url);
-			if (res.title) setTitle(res.title);
-			if (res.description) setDescription(res.description);
-			if (Array.isArray(res.tags) && res.tags.length) setTags(res.tags.join(", "));
-			if (res.categoryId != null) setCategoryId(String(res.categoryId));
+			// 程序赋值不受 Input maxLength 约束,须按服务端 zod 限制裁剪
+			// (title 200 / description 500 / 单标签 30 且最多 20),否则保存必 400
+			if (res.title) setTitle(res.title.slice(0, 200));
+			if (res.description) setDescription(res.description.slice(0, 500));
+			if (Array.isArray(res.tags) && res.tags.length)
+				setTags(
+					res.tags
+						.map((t) => t.trim().slice(0, 30))
+						.filter(Boolean)
+						.slice(0, 20)
+						.join(", "),
+				);
+			// AI 给的 categoryId 须存在于已拉取的分类中,否则 select 显示空白却仍按原值提交
+			if (
+				res.categoryId != null &&
+				flatCategories.some((c) => c.category.id === res.categoryId)
+			) {
+				setCategoryId(String(res.categoryId));
+			}
 		} catch (err) {
 			setAiError(err instanceof ApiError ? err.message : "AI 分析失败,请稍后重试");
 		} finally {
